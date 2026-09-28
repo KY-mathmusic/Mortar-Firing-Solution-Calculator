@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fire Direction Calculator</title>
+<style>
+:root{
+  --bg:#161a14; --panel:#1e2419; --line:#3a4530; --text:#e8e6d8; --dim:#9aa08a;
+  --amber:#d9a441; --red:#b5493f; --purple:#8b6fb5; --green:#7fae7a; --blue:#5f8fc4;
+  --input-bg:#10130d;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f2f0e6; --panel:#ffffff; --line:#d8d5c4; --text:#232318; --dim:#68664f;
+    --input-bg:#f7f5eb;
+  }
+}
+html{ scroll-padding-top:env(safe-area-inset-top,0px); height:100%; }
+*{ box-sizing:border-box; }
+body{
+  margin:0; height:100%; background:var(--bg); color:var(--text);
+  font-family:'Iowan Old Style','Georgia',serif;
+  padding:1.5rem;
+}
+h1{
+  font-family:'Georgia',serif; font-weight:400; font-size:1.5rem; letter-spacing:.02em;
+  margin:0 0 .25rem; color:var(--text);
+}
+.sub{ color:var(--dim); font-size:.85rem; margin:0 0 1.5rem; max-width:60ch; line-height:1.5;}
+.wrap{ display:grid; grid-template-columns:300px minmax(0,1fr); gap:1.25rem; max-width:1500px; margin:0 auto; }
+@media (max-width:820px){ .wrap{ grid-template-columns:1fr; } }
+.panel{
+  background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:1.25rem;
+}
+fieldset{ border:none; padding:0; margin:0 0 1.1rem; }
+legend{ font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); padding:0 0 .5rem; }
+.row{ display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin-bottom:.5rem; }
+label{ font-size:.78rem; color:var(--dim); display:block; margin-bottom:.2rem; }
+input{
+  width:100%; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+  font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:.95rem; padding:.5rem .55rem;
+  border-radius:6px; outline:none;
+}
+input:focus{ border-color:var(--amber); }
+input[readonly]{ opacity:.65; cursor:not-allowed; }
+select{
+  width:100%; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+  font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:.95rem; padding:.5rem .55rem;
+  border-radius:6px; outline:none;
+}
+select:focus{ border-color:var(--amber); }
+.results{ border-top:1px dashed var(--line); margin-top:1rem; padding-top:1rem; }
+.res-row{ display:flex; justify-content:space-between; align-items:baseline; padding:.3rem 0; font-size:.92rem; }
+.res-row .k{ color:var(--dim); }
+.res-row .v{ font-family:ui-monospace,'SF Mono',Menlo,monospace; font-weight:600; }
+.v.amber{ color:var(--amber);} .v.red{color:var(--red);} .v.purple{color:var(--purple);}
+.v.green{ color:var(--green);} .v.blue{color:var(--blue);}
+svg{ width:100%; height:auto; display:block; }
+svg text.lbl{ paint-order:stroke fill; stroke:var(--panel); stroke-width:4px; stroke-linejoin:round; }
+.dpanel{ display:flex; align-items:center; justify-content:center; }
+.diagram-title{ font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); margin:0 0 .75rem; }
+table.ttable{ width:100%; border-collapse:collapse; font-size:.82rem; margin-top:.5rem; }
+table.ttable th{ text-align:right; color:var(--dim); font-weight:400; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; padding:.3rem .3rem; border-bottom:1px solid var(--line); }
+table.ttable th:first-child, table.ttable td:first-child{ text-align:left; }
+table.ttable td{ text-align:right; padding:.3rem; font-family:ui-monospace,'SF Mono',Menlo,monospace; border-bottom:1px dashed var(--line); }
+</style>
+</head>
+<body>
+<h1>Mortar Fire Direction</h1>
+<p class="sub">Enter mortar and target grid coordinates, plus the OT line reported by the FO. Range, bearing and Angle T update live on the diagram.</p>
+<div class="wrap">
+  <div class="panel">
+    <fieldset>
+      <legend>Target grid</legend>
+      <div class="row">
+        <div><label for="tN">Northing (m)</label><input id="tN" type="number" value="43250" min="0" max="99999"></div>
+        <div><label for="tE">Easting (m)</label><input id="tE" type="number" value="61800" min="0" max="99999"></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Mortar grid</legend>
+      <div class="row">
+        <div><label for="mN">Northing (m)</label><input id="mN" type="number" value="42600" min="0" max="99999"></div>
+        <div><label for="mE">Easting (m)</label><input id="mE" type="number" value="61200" min="0" max="99999"></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Observer</legend>
+      <label for="ot">OT line (mils, FO → Target)</label>
+      <input id="ot" type="number" value="4200" min="0" max="6400">
+    </fieldset>
+    <div class="results" id="results"></div>
+  </div>
+  <div class="panel dpanel">
+    <div style="width:100%">
+      <p class="diagram-title">Diagram</p>
+      <svg id="svg" viewBox="0 0 820 600"></svg>
+    </div>
+  </div>
+</div>
+
+<h1 style="margin-top:2.5rem">Adjusted Azimuth</h1>
+<p class="sub">Enter the FO's spot correction (Add/Drop/Right/Left, raw distance) off the OT line, and the base target grid it's applied to. The corrected target grid updates live on the diagram.</p>
+<div class="wrap">
+  <div class="panel">
+    <fieldset>
+      <legend>Base target grid (locked to Target grid above)</legend>
+      <div class="row">
+        <div><label for="beN">Northing (m)</label><input id="beN" type="number" value="43250" readonly></div>
+        <div><label for="beE">Easting (m)</label><input id="beE" type="number" value="61800" readonly></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Correction</legend>
+      <div class="row">
+        <div><label for="addDrop">Add(+) / Drop(−), m</label><input id="addDrop" type="number" value="100"></div>
+        <div><label for="rightLeft">Right(+) / Left(−), m</label><input id="rightLeft" type="number" value="-50"></div>
+      </div>
+      <label for="ot2">OT Line (mils, locked to Observer above)</label>
+      <input id="ot2" type="number" value="4200" readonly>
+    </fieldset>
+    <div class="results" id="results2"></div>
+  </div>
+  <div class="panel dpanel">
+    <div style="width:100%">
+      <p class="diagram-title">Diagram</p>
+      <svg id="svg2" viewBox="0 0 820 600"></svg>
+    </div>
+  </div>
+</div>
+
+<h1 style="margin-top:2.5rem">Line Target Ranging</h1>
+<p class="sub">Set the target front length and bearing off the New Target from Section 2. Three target grids are ranged from the Mortar grid in Section 1; Mortar 1 is the rightmost.</p>
+<div class="wrap">
+  <div class="panel">
+    <fieldset>
+      <legend>Target grid (locked to New Target grid above)</legend>
+      <div class="row">
+        <div><label for="ctrN">Northing (m)</label><input id="ctrN" type="number" readonly></div>
+        <div><label for="ctrE">Easting (m)</label><input id="ctrE" type="number" readonly></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Mortar grid (locked to Mortar grid above)</legend>
+      <div class="row">
+        <div><label for="ctrMN">Northing (m)</label><input id="ctrMN" type="number" readonly></div>
+        <div><label for="ctrME">Easting (m)</label><input id="ctrME" type="number" readonly></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Target row</legend>
+      <div class="row">
+        <div><label for="tfl">TFL (m)</label><input id="tfl" type="number" value="200"></div>
+        <div><label for="tfb">TFB (mils)</label><input id="tfb" type="number" value="1000"></div>
+      </div>
+      <label for="blastDia">Blast diameter (m)</label>
+      <input id="blastDia" type="number" value="50">
+    </fieldset>
+    <div class="results" id="results3"></div>
+  </div>
+  <div class="panel dpanel">
+    <div style="width:100%">
+      <p class="diagram-title">Diagram</p>
+      <svg id="svg3" viewBox="0 0 820 560"></svg>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const ids=['tN','tE','mN','mE','ot'];
+ids.forEach(id=>$(id).addEventListener('input',()=>{render(); render2(); render3();}));
+const ids2=['addDrop','rightLeft'];
+ids2.forEach(id=>$(id).addEventListener('input',()=>{render2(); render3();}));
+const ids3=['tfl','tfb','blastDia'];
+ids3.forEach(id=>$(id).addEventListener('input',render3));
+
+const MPD=17.77778; // mils per degree
+const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+const grid5=n=>Math.round(clamp(n,0,99999)).toString().padStart(5,'0');
+
+function toMils(deg){ let m=MPD*deg; if(m<0) m+=6400; return m; }
+
+function compute(){
+  const tN=clamp(parseFloat($('tN').value)||0,0,99999), tE=clamp(parseFloat($('tE').value)||0,0,99999);
+  const mN=clamp(parseFloat($('mN').value)||0,0,99999), mE=clamp(parseFloat($('mE').value)||0,0,99999);
+  const ot=clamp(parseFloat($('ot').value)||0,0,6400);
+  const dN=tN-mN, dE=tE-mE;
+  const range=Math.sqrt(dE*dE+dN*dN);
+  const basicDeg = dN!==0 ? (Math.atan(Math.abs(dE)/Math.abs(dN))*180/Math.PI) : 90;
+  const basicMils = MPD*basicDeg;
+  let btDeg = Math.atan2(dE,dN)*180/Math.PI;
+  if(btDeg<0) btDeg+=360;
+  const btMils = MPD*btDeg;
+  let angleT = Math.abs(btMils-ot);
+  if(angleT>3200) angleT=6400-angleT;
+  return {dN,dE,range,basicDeg,basicMils,btDeg,btMils,ot,angleT};
+}
+
+function bearingVec(mils){ // returns {dx east, dy north} unit vector
+  const rad = mils/MPD * Math.PI/180;
+  return {dx:Math.sin(rad), dy:Math.cos(rad)};
+}
+
+function render(){
+  const r = compute();
+  $('results').innerHTML = `
+    <div class="res-row"><span class="k">dN</span><span class="v red">${r.dN.toFixed(0)} m</span></div>
+    <div class="res-row"><span class="k">dE</span><span class="v red">${r.dE.toFixed(0)} m</span></div>
+    <div class="res-row"><span class="k">Range</span><span class="v purple">${r.range.toFixed(0)} m</span></div>
+    <div class="res-row"><span class="k">Basic angle (θ)</span><span class="v">${r.basicDeg.toFixed(1)}° / ${r.basicMils.toFixed(0)} mils</span></div>
+    <div class="res-row"><span class="k">BT line</span><span class="v amber">${r.btDeg.toFixed(1)}° / ${r.btMils.toFixed(0)} mils</span></div>
+    <div class="res-row"><span class="k">OT line</span><span class="v green">${r.ot.toFixed(0)} mils</span></div>
+    <div class="res-row"><span class="k">Angle T</span><span class="v blue">${r.angleT.toFixed(0)} mils</span></div>
+  `;
+  drawSvg(r);
+}
+
+function perp(x1,y1,x2,y2,dist,along){
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1;
+  const mx=x1+dx*along, my=y1+dy*along;
+  return {x:mx - (dy/len)*dist, y:my + (dx/len)*dist};
+}
+
+// Builds an SVG arc path for the minor angle between two directions (a1, a2 in radians,
+// screen convention: 0 = east, increasing clockwise) around center (cx,cy) at radius r.
+// Returns the path string plus the point at the arc's angular midpoint (for labels).
+// Picks whichever side of a line clears a set of circles {x,y,r} by more.
+function perpAway(x1,y1,x2,y2,along,dist,avoid){
+  const a=perp(x1,y1,x2,y2,dist,along), b=perp(x1,y1,x2,y2,-dist,along);
+  const clear=p=>Math.min(...avoid.map(c=>Math.hypot(p.x-c.x,p.y-c.y)-c.r));
+  return clear(a)>=clear(b) ? a : b;
+}
+
+function angleArc(cx,cy,a1,a2,r){
+  let d = ((a2-a1)+3*Math.PI) % (2*Math.PI) - Math.PI; // wrap to (-PI, PI]
+  const sweep = d>=0 ? 1 : 0;
+  const sx = cx+r*Math.cos(a1), sy = cy+r*Math.sin(a1);
+  const ex = cx+r*Math.cos(a1+d), ey = cy+r*Math.sin(a1+d);
+  const mid = {x:cx+(r+15)*Math.cos(a1+d/2), y:cy+(r+15)*Math.sin(a1+d/2)};
+  return {path:`M${sx},${sy} A${r},${r} 0 0 ${sweep} ${ex},${ey}`, mid};
+}
+
+function drawSvg(r){
+  const cx=400, cy=290, maxExtent=Math.max(Math.abs(r.dE),Math.abs(r.dN),1);
+  const scale = Math.min(200/maxExtent, 11);
+  const mx = cx - r.dE*scale/2, my = cy + r.dN*scale/2;
+  const tx = cx + r.dE*scale/2, ty = cy - r.dN*scale/2;
+  const foVec = bearingVec(r.ot), foLen=155;
+  const fx = tx - foVec.dx*foLen, fy = ty + foVec.dy*foLen;
+  const nLen=75;
+  const midx = tx, midy = my; // corner point for dE/dN guides
+
+  const L='class="lbl"'; // halo styling, see CSS
+  const btLbl = perp(mx,my,tx,ty,32,0.28);
+  const rangeLbl = perp(mx,my,tx,ty,32,0.68);
+  const otLbl = perp(fx,fy,tx,ty,20,0.4);
+  const deLbl = perp(mx,my,midx,midy,18,0.5);
+  const dnLbl = perp(midx,midy,tx,ty,18,0.5);
+
+  // theta: angle at Mortar between North and the BT line
+  const thetaArc = angleArc(mx,my, -Math.PI/2, Math.atan2(ty-my,tx-mx), 46);
+  // Angle T: angle at Target between the line back to Mortar and the line to FO
+  const angleTArc = angleArc(tx,ty, Math.atan2(my-ty,mx-tx), Math.atan2(fy-ty,fx-tx), 46);
+
+  const svg=$('svg');
+  svg.innerHTML = `
+    <line x1="${mx}" y1="${my}" x2="${mx}" y2="${my-nLen}" stroke="var(--blue)" stroke-width="2" marker-end="url(#ah-blue)"/>
+    <text ${L} x="${mx}" y="${my-nLen-10}" fill="var(--blue)" font-size="15" text-anchor="middle">N</text>
+
+    <line x1="${mx}" y1="${my}" x2="${midx}" y2="${midy}" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <line x1="${midx}" y1="${midy}" x2="${tx}" y2="${ty}" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <text ${L} x="${deLbl.x}" y="${deLbl.y}" fill="var(--red)" font-size="14" text-anchor="middle">dE</text>
+    <text ${L} x="${dnLbl.x}" y="${dnLbl.y}" fill="var(--red)" font-size="14" text-anchor="middle">dN</text>
+
+    <line x1="${mx}" y1="${my}" x2="${tx}" y2="${ty}" stroke="var(--amber)" stroke-width="2.5" marker-end="url(#ah-amber)"/>
+    <text ${L} x="${btLbl.x}" y="${btLbl.y}" fill="var(--amber)" font-size="14" text-anchor="middle">BT Line</text>
+    <text ${L} x="${rangeLbl.x}" y="${rangeLbl.y}" fill="var(--purple)" font-size="14" text-anchor="middle">Range</text>
+
+    <line x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" stroke="var(--green)" stroke-width="2" marker-end="url(#ah-green)"/>
+    <text ${L} x="${otLbl.x}" y="${otLbl.y}" fill="var(--green)" font-size="14" text-anchor="middle">OT Line</text>
+
+    <circle cx="${mx}" cy="${my}" r="34" fill="#4a4020" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="${mx}" y="${my+5}" fill="#f5f1e0" font-size="14" text-anchor="middle">Mortar</text>
+
+    <circle cx="${tx}" cy="${ty}" r="34" fill="#4a2020" stroke="var(--red)" stroke-width="1.5"/>
+    <text x="${tx}" y="${ty+5}" fill="#f5f1e0" font-size="14" text-anchor="middle">Target</text>
+
+    <circle cx="${fx}" cy="${fy}" r="30" fill="#204a28" stroke="var(--green)" stroke-width="1.5"/>
+    <text x="${fx}" y="${fy+5}" fill="#f5f1e0" font-size="14" text-anchor="middle">FO</text>
+
+    <path d="${thetaArc.path}" fill="none" stroke="var(--dim)" stroke-width="2"/>
+    <text ${L} x="${thetaArc.mid.x}" y="${thetaArc.mid.y}" fill="var(--dim)" font-size="14" text-anchor="middle">θ</text>
+
+    <path d="${angleTArc.path}" fill="none" stroke="var(--blue)" stroke-width="2"/>
+    <text ${L} x="${angleTArc.mid.x}" y="${angleTArc.mid.y}" fill="var(--blue)" font-size="14" text-anchor="middle">Angle T</text>
+
+    <defs>
+      <marker id="ah-blue" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--blue)"/></marker>
+      <marker id="ah-amber" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--amber)"/></marker>
+      <marker id="ah-green" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--green)"/></marker>
+    </defs>
+  `;
+}
+
+render();
+
+const OFFSET_RIGHT=1600; // mils, perpendicular to OT line
+
+function compute2(){
+  const beN=parseFloat($('tN').value)||0, beE=parseFloat($('tE').value)||0;
+  $('beN').value=beN; $('beE').value=beE;
+  const ot2=parseFloat($('ot').value)||0;
+  $('ot2').value=ot2;
+  const addDrop=parseFloat($('addDrop').value)||0; // + Add (away from FO), - Drop
+  const rightLeft=parseFloat($('rightLeft').value)||0; // + Right, - Left
+  const vAlong = bearingVec(ot2); // along OT line, away from FO
+  const vRight = bearingVec(((ot2+OFFSET_RIGHT)%6400+6400)%6400); // 90° right of OT line
+  const dE = addDrop*vAlong.dx + rightLeft*vRight.dx;
+  const dN = addDrop*vAlong.dy + rightLeft*vRight.dy;
+  const newE = beE+dE, newN = beN+dN;
+  const resultDist = Math.hypot(dE,dN);
+  let resultAzDeg = Math.atan2(dE,dN)*180/Math.PI; if(resultAzDeg<0) resultAzDeg+=360;
+  return {beN,beE,ot2,addDrop,rightLeft,vAlong,vRight,dE,dN,newE,newN,resultDist,resultAzMils:MPD*resultAzDeg};
+}
+
+function render2(){
+  const r = compute2();
+  $('results2').innerHTML = `
+    <div class="res-row"><span class="k">dE</span><span class="v red">${r.dE.toFixed(0)} m</span></div>
+    <div class="res-row"><span class="k">dN</span><span class="v red">${r.dN.toFixed(0)} m</span></div>
+    <div class="res-row"><span class="k">Resultant</span><span class="v">${r.resultDist.toFixed(0)} m / ${r.resultAzMils.toFixed(0)} mils</span></div>
+    <div class="res-row"><span class="k">New Target Northing</span><span class="v">${grid5(r.newN)} m</span></div>
+    <div class="res-row"><span class="k">New Target Easting</span><span class="v">${grid5(r.newE)} m</span></div>
+  `;
+  drawSvg2(r);
+}
+
+function drawSvg2(r){
+  const cx=360, cy=310;
+  const maxExtent=Math.max(Math.abs(r.addDrop),Math.abs(r.rightLeft),1);
+  const unitScale = Math.min(150/maxExtent, 14);
+  const segLen = v => v===0 ? 0 : Math.sign(v)*Math.max(70, Math.abs(v)*unitScale);
+  const addLen = segLen(r.addDrop), rlLen = segLen(r.rightLeft);
+
+  const t0x=cx, t0y=cy;
+  const midx=t0x+addLen*r.vAlong.dx, midy=t0y-addLen*r.vAlong.dy;
+  const t1x=midx+rlLen*r.vRight.dx, t1y=midy-rlLen*r.vRight.dy;
+  const otLen=220;
+  const ot1x=t0x-r.vAlong.dx*otLen*0.45, ot1y=t0y+r.vAlong.dy*otLen*0.45;
+  const ot2x=t0x+r.vAlong.dx*otLen, ot2y=t0y-r.vAlong.dy*otLen;
+
+  // label placement: try both sides of a line, keep whichever clears the two circles by more
+  const avoid=[{x:t0x,y:t0y,r:34},{x:t1x,y:t1y,r:34}];
+
+  const L='class="lbl"';
+  const cornerx=t1x, cornery=t0y;
+  const otLbl2 = perpAway(ot1x,ot1y,ot2x,ot2y,0.1,24,avoid);
+  const addLbl = addLen!==0 ? perpAway(t0x,t0y,midx,midy,0.5,26,avoid) : null;
+  const rlLbl = rlLen!==0 ? perpAway(midx,midy,t1x,t1y,0.5,26,avoid) : null;
+  const deLbl2 = perpAway(t0x,t0y,cornerx,cornery,0.5,20,avoid);
+  const dnLbl2 = perpAway(cornerx,cornery,t1x,t1y,0.5,20,avoid);
+
+  const svg=$('svg2');
+  svg.innerHTML = `
+    <line x1="${ot1x}" y1="${ot1y}" x2="${ot2x}" y2="${ot2y}" stroke="var(--green)" stroke-width="1.6" stroke-dasharray="6 4"/>
+    <text ${L} x="${otLbl2.x}" y="${otLbl2.y}" fill="var(--green)" font-size="14" text-anchor="middle">OT Line</text>
+
+    <line x1="${t0x}" y1="${t0y}" x2="${cornerx}" y2="${cornery}" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <line x1="${cornerx}" y1="${cornery}" x2="${t1x}" y2="${t1y}" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <text ${L} x="${deLbl2.x}" y="${deLbl2.y}" fill="var(--red)" font-size="14" text-anchor="middle">dE</text>
+    <text ${L} x="${dnLbl2.x}" y="${dnLbl2.y}" fill="var(--red)" font-size="14" text-anchor="middle">dN</text>
+
+    ${addLen!==0 ? `
+    <line x1="${t0x}" y1="${t0y}" x2="${midx}" y2="${midy}" stroke="var(--amber)" stroke-width="2.5" marker-end="url(#ah-amber2)"/>
+    <text ${L} x="${addLbl.x}" y="${addLbl.y}" fill="var(--amber)" font-size="14" text-anchor="middle">Add/Drop</text>` : ''}
+
+    ${rlLen!==0 ? `
+    <line x1="${midx}" y1="${midy}" x2="${t1x}" y2="${t1y}" stroke="var(--blue)" stroke-width="2.5" marker-end="url(#ah-blue2)"/>
+    <text ${L} x="${rlLbl.x}" y="${rlLbl.y}" fill="var(--blue)" font-size="14" text-anchor="middle">Right/Left</text>` : ''}
+
+    <circle cx="${t0x}" cy="${t0y}" r="30" fill="#4a2020" stroke="var(--red)" stroke-width="1.5"/>
+    <text x="${t0x}" y="${t0y+5}" fill="#f5f1e0" font-size="13" text-anchor="middle">Target</text>
+
+    <circle cx="${t1x}" cy="${t1y}" r="30" fill="#3a2a4a" stroke="var(--purple)" stroke-width="1.5"/>
+    <text x="${t1x}" y="${t1y-2}" fill="#f5f1e0" font-size="12" text-anchor="middle">New</text>
+    <text x="${t1x}" y="${t1y+13}" fill="#f5f1e0" font-size="12" text-anchor="middle">Target</text>
+
+    <defs>
+      <marker id="ah-amber2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--amber)"/></marker>
+      <marker id="ah-blue2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--blue)"/></marker>
+    </defs>
+  `;
+}
+
+render2();
+
+function compute3(){
+  const c2 = compute2();
+  const mN=parseFloat($('mN').value)||0, mE=parseFloat($('mE').value)||0;
+  $('ctrN').value=c2.newN.toFixed(0); $('ctrE').value=c2.newE.toFixed(0);
+  $('ctrMN').value=mN; $('ctrME').value=mE;
+  const TFL=parseFloat($('tfl').value)||0, TFB=parseFloat($('tfb').value)||0;
+  const blastDia=parseFloat($('blastDia').value)||0;
+  const BI=(TFL-blastDia)/2;
+  const v=bearingVec(TFB);
+  const dE=BI*v.dx, dN=BI*v.dy;
+  const targets=[1.0,0,-1.0].map((k,i)=>{
+    const tE=c2.newE+k*dE, tN=c2.newN+k*dN;
+    const rdE=tE-mE, rdN=tN-mN;
+    const range=Math.hypot(rdE,rdN);
+    let btDeg=Math.atan2(rdE,rdN)*180/Math.PI; if(btDeg<0) btDeg+=360;
+    return {num:i+1, k, tN, tE, range, btMils:MPD*btDeg};
+  });
+  return {BI,dE,dN,targets,centerE:c2.newE,centerN:c2.newN,mN,mE,TFL,TFB,blastDia,v};
+}
+
+function render3(){
+  const r=compute3();
+  let rows=r.targets.map(t=>`
+    <tr><td>Target ${t.num}</td><td>${grid5(t.tN)}</td><td>${grid5(t.tE)}</td><td>${t.range.toFixed(0)}</td><td>${t.btMils.toFixed(0)}</td></tr>`).join('');
+  $('results3').innerHTML = `
+    <div class="res-row"><span class="k">BI (interval)</span><span class="v purple">${r.BI.toFixed(1)} m</span></div>
+    <div class="res-row"><span class="k">dE / dN per BI</span><span class="v red">${r.dE.toFixed(1)} / ${r.dN.toFixed(1)} m</span></div>
+    <table class="ttable">
+      <tr><th>Target</th><th>North</th><th>East</th><th>Range</th><th>Line (mils)</th></tr>
+      ${rows}
+    </table>
+  `;
+  drawSvg3(r);
+}
+
+function drawSvg3(r){
+  const cx=430, cy=210;
+  const scale=Math.min(90/(1.5*Math.abs(r.BI)||1), 2.4);
+  const vR=bearingVec(((r.TFB+OFFSET_RIGHT)%6400+6400)%6400); // perpendicular to the row
+  const pos=k=>({x:cx+k*r.BI*scale*r.v.dx, y:cy-k*r.BI*scale*r.v.dy});
+  const p1=pos(1.0), p2=pos(0), p3=pos(-1.0);
+  const off=(p,dist)=>({x:p.x+vR.dx*dist, y:p.y-vR.dy*dist});
+  const circR=16;
+  const blastR=Math.max(r.blastDia*0.5*scale, 4);
+
+  const mortarLen=115;
+  const mPos=(p,mils)=>{ const v=bearingVec(mils); return {x:p.x-mortarLen*v.dx, y:p.y+mortarLen*v.dy}; };
+  const m1=mPos(p1,r.targets[0].btMils), m2=mPos(p2,r.targets[1].btMils), m3=mPos(p3,r.targets[2].btMils);
+  const mp=[[p1,m1],[p2,m2],[p3,m3]];
+  const line=(p,m)=>`<line x1="${p.x}" y1="${p.y}" x2="${m.x}" y2="${m.y}" stroke="var(--amber)" stroke-width="2" marker-end="url(#ah-amber3)"/>`;
+
+  // TFL: dimension line well above the row, spanning Target 1 to Target 3
+  const tflOff=100, tflA=off(p1,tflOff), tflB=off(p3,tflOff);
+  // BI: a second, closer dimension line above the row, spanning Target 2 to Target 3 only
+  const biOff=60, biA=off(p2,biOff), biB=off(p3,biOff);
+  // TFB: parallel to the row, just beside the targets, on whichever side stays clearest of the amber mortar lines
+  const gapD=Math.max(55, blastR+32);
+  const tfbFor=s=>{
+    const b={x:p2.x-r.v.dx*45+vR.dx*gapD*s, y:p2.y+r.v.dy*45-vR.dy*gapD*s};
+    return {base:b, tip:{x:b.x+r.v.dx*90, y:b.y-r.v.dy*90}};
+  };
+  const segDist=(px,py,x1,y1,x2,y2)=>{
+    const dx=x2-x1, dy=y2-y1, l2=dx*dx+dy*dy||1;
+    const t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/l2));
+    return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
+  };
+  const obstacles=mp.map(([p,m])=>[p.x,p.y,m.x,m.y]).concat([[tflA.x,tflA.y,tflB.x,tflB.y],[biA.x,biA.y,biB.x,biB.y]]);
+  const tfbScore=c=>{
+    let best=Infinity;
+    for(let i=0;i<=8;i++){
+      const t=i/8, x=c.base.x+(c.tip.x-c.base.x)*t, y=c.base.y+(c.tip.y-c.base.y)*t;
+      obstacles.forEach(o=>{ best=Math.min(best,segDist(x,y,...o)); });
+    }
+    return best;
+  };
+  const tfbA=tfbFor(1), tfbB=tfbFor(-1);
+  const tfbPick=tfbScore(tfbA)>tfbScore(tfbB) ? tfbA : tfbB;
+  const tfbBase=tfbPick.base, tfbTip=tfbPick.tip;
+
+  // avoid every circle (targets, blast rings, mortars) when placing any label
+  const avoid=[p1,p2,p3].map(p=>({x:p.x,y:p.y,r:blastR+8}))
+    .concat([m1,m2,m3].map(m=>({x:m.x,y:m.y,r:circR+6})));
+  const L='class="lbl"';
+  const tflLbl=perpAway(tflA.x,tflA.y,tflB.x,tflB.y,0.15,20,avoid);
+  const tfbLbl=perpAway(tfbBase.x,tfbBase.y,tfbTip.x,tfbTip.y,0.7,20,avoid);
+  const biLbl=perpAway(biA.x,biA.y,biB.x,biB.y,0.5,18,avoid);
+  const targetsLbl=perpAway(p1.x,p1.y,p3.x,p3.y,0.5,circR+26,avoid);
+  const mortarsLbl=perpAway(m1.x,m1.y,m3.x,m3.y,0.5,circR+26,avoid);
+
+  // thin extension ticks from each circle edge up to its dimension line
+  const tick=(p,dist)=>`<line x1="${p.x+vR.dx*circR}" y1="${p.y-vR.dy*circR}" x2="${off(p,dist).x}" y2="${off(p,dist).y}" stroke="var(--dim)" stroke-width="1" stroke-dasharray="2 3"/>`;
+
+  const svg=$('svg3');
+  svg.innerHTML = `
+    ${tick(p1,tflOff)}${tick(p3,tflOff)}
+    <line x1="${tflA.x}" y1="${tflA.y}" x2="${tflB.x}" y2="${tflB.y}" stroke="#4a7a4a" stroke-width="2" marker-start="url(#ah-tfl)" marker-end="url(#ah-tfl)"/>
+    <text ${L} x="${tflLbl.x}" y="${tflLbl.y}" fill="#7fae7a" font-size="14" text-anchor="middle">TFL = ${r.TFL.toFixed(0)} m</text>
+
+    <line x1="${tfbBase.x}" y1="${tfbBase.y}" x2="${tfbTip.x}" y2="${tfbTip.y}" stroke="var(--red)" stroke-width="2" marker-end="url(#ah-red3)"/>
+    <text ${L} x="${tfbLbl.x}" y="${tfbLbl.y}" fill="var(--red)" font-size="14" text-anchor="middle">TFB</text>
+
+    ${tick(p2,biOff)}${tick(p3,biOff)}
+    <line x1="${biA.x}" y1="${biA.y}" x2="${biB.x}" y2="${biB.y}" stroke="var(--purple)" stroke-width="2" marker-start="url(#ah-purple3)" marker-end="url(#ah-purple3)"/>
+    <text ${L} x="${biLbl.x}" y="${biLbl.y}" fill="var(--purple)" font-size="13" text-anchor="middle">BI = ${r.BI.toFixed(1)} m</text>
+
+    ${[p1,p2,p3].map(p=>`<circle cx="${p.x}" cy="${p.y}" r="${blastR}" fill="none" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.7"/>`).join('')}
+
+    ${mp.map(([p,m])=>line(p,m)).join('')}
+
+    ${[p1,p2,p3].map((p,i)=>`
+    <circle cx="${p.x}" cy="${p.y}" r="${circR}" fill="#4a2020" stroke="var(--red)" stroke-width="1.5"/>
+    <text x="${p.x}" y="${p.y+5}" fill="#f5f1e0" font-size="13" text-anchor="middle">${i+1}</text>`).join('')}
+    <text ${L} x="${targetsLbl.x}" y="${targetsLbl.y}" fill="var(--red)" font-size="14" text-anchor="middle">Targets</text>
+
+    ${[m1,m2,m3].map((m,i)=>`
+    <circle cx="${m.x}" cy="${m.y}" r="${circR}" fill="#4a4020" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="${m.x}" y="${m.y+5}" fill="#f5f1e0" font-size="13" text-anchor="middle">${i+1}</text>`).join('')}
+    <text ${L} x="${mortarsLbl.x}" y="${mortarsLbl.y}" fill="var(--amber)" font-size="14" text-anchor="middle">Mortars</text>
+
+    <defs>
+      <marker id="ah-tfl" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 Z" fill="#7fae7a"/></marker>
+      <marker id="ah-amber3" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--amber)"/></marker>
+      <marker id="ah-red3" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--red)"/></marker>
+      <marker id="ah-purple3" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 Z" fill="var(--purple)"/></marker>
+    </defs>
+  `;
+}
+
+render3();
+
+</script>
+</body>
+</html>
